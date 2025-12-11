@@ -24,6 +24,11 @@ case "$1" in
         echo "Fetching logs for Peril RabbitMQ container..."
         docker logs -f peril_rabbitmq
         ;;
+    stomp)
+        docker rm -f rabbitmq-stomp
+        docker build -t rabbitmq-stomp .
+        docker run -d --name rabbitmq-stomp -p 5672:5672 -p 15672:15672 -p 61613:61613 rabbitmq-stomp
+        ;;
     *)
         echo "Usage: $0 {start|stop|logs}"
         exit 1
