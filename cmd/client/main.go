@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/signal"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -27,17 +26,53 @@ func main() {
 		fmt.Println("Failed to get welcome message:", err)
 		return
 	}
-	_, que, err := pubsub.DeclareAndBind(
+	_, _, err = pubsub.DeclareAndBind(
 		amqpConn,
 		routing.ExchangePerilDirect,
 		fmt.Sprintf("%s.%s", routing.PauseKey, username),
 		routing.PauseKey,
 		pubsub.SimpleQueueType{Durable: false},
 	)
-	fmt.Println(que.Name)
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
-	fmt.Println("\rclose command received, shutting down now")
-	os.Exit(0)
+
+	gameState := gamelogic.NewGameState(username)
+
+	for true {
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+		switch words[0] {
+		case "spawn":
+			err = gameState.CommandSpawn(words)
+			if err != nil {
+				fmt.Println("Failed to spawn:", err)
+			}
+		case "move":
+			move, err := gameState.CommandMove(words)
+			if err != nil {
+				fmt.Println("Failed to move:", err)
+				continue
+			}
+			fmt.Println("Moved to:", move)
+		case "status":
+			gameState.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			fmt.Println("Spamming not allowed yet!")
+		case "quit":
+			gamelogic.PrintQuit()
+			os.Exit(0)
+		default:
+			fmt.Println("Unknown command:", words[0])
+			continue
+		}
+	}
+
+	// fmt.Println(que.Name)
+	// signalChan := make(chan os.Signal, 1)
+	// signal.Notify(signalChan, os.Interrupt)
+	// <-signalChan
+	// fmt.Println("\rclose command received, shutting down now")
+	// os.Exit(0)
 }
