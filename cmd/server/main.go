@@ -26,6 +26,18 @@ func main() {
 		return
 	}
 
+	_, _, err = pubsub.DeclareAndBind(
+		amqpConn,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.SimpleQueueType{Durable: true},
+	)
+	if err != nil {
+		fmt.Println("Failed to declare and bind:", err)
+		return
+	}
+
 	for true {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {

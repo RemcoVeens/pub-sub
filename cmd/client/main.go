@@ -12,6 +12,13 @@ import (
 
 const RMQConnectionString = "amqp://guest:guest@localhost:5672/"
 
+func HandlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	defer fmt.Print("> ")
+	return func(ps routing.PlayingState) {
+		gs.HandlePause(ps)
+	}
+}
+
 func main() {
 	fmt.Println("Starting Peril client...")
 
@@ -33,8 +40,18 @@ func main() {
 		routing.PauseKey,
 		pubsub.SimpleQueueType{Durable: false},
 	)
+	if err != nil {
+		fmt.Println("Failed to declare and bind:", err)
+		return
+	}
 
 	gameState := gamelogic.NewGameState(username)
+	err = pubsub.SubscribeJSON(amqpConn, string(routing.ExchangePerilDirect), fmt.Sprintf("%s.%s", routing.PauseKey, username),
+		routing.PauseKey, pubsub.SimpleQueueType{Durable: false}, HandlerPause(gameState))
+	if err != nil {
+		fmt.Println("Failed to subscribe:", err)
+		return
+	}
 
 	for true {
 		words := gamelogic.GetInput()
