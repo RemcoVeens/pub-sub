@@ -12,10 +12,28 @@ import (
 
 const RMQConnectionString = "amqp://guest:guest@localhost:5672/"
 
-func HandlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
-	defer fmt.Print("> ")
-	return func(ps routing.PlayingState) {
+func HandlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.AckType {
+	return func(ps routing.PlayingState) pubsub.AckType {
+		defer fmt.Print("> ")
 		gs.HandlePause(ps)
+		return pubsub.Ack
+	}
+}
+
+func HandlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckType {
+	return func(am gamelogic.ArmyMove) pubsub.AckType {
+		defer fmt.Print("> ")
+		outcome := gs.HandleMove(am)
+		switch outcome {
+		case gamelogic.MoveOutComeSafe:
+			return pubsub.Ack
+		case gamelogic.MoveOutcomeMakeWar:
+			return pubsub.Ack
+		case gamelogic.MoveOutcomeSamePlayer:
+			return pubsub.NackDiscard
+		default:
+			return pubsub.NackRequeue
+		}
 	}
 }
 
@@ -33,7 +51,7 @@ func main() {
 		fmt.Println("Failed to get welcome message:", err)
 		return
 	}
-	_, _, err = pubsub.DeclareAndBind(
+	channel, _, err := pubsub.DeclareAndBind(
 		amqpConn,
 		routing.ExchangePerilDirect,
 		fmt.Sprintf("%s.%s", routing.PauseKey, username),
@@ -48,6 +66,13 @@ func main() {
 	gameState := gamelogic.NewGameState(username)
 	err = pubsub.SubscribeJSON(amqpConn, string(routing.ExchangePerilDirect), fmt.Sprintf("%s.%s", routing.PauseKey, username),
 		routing.PauseKey, pubsub.SimpleQueueType{Durable: false}, HandlerPause(gameState))
+	if err != nil {
+		fmt.Println("Failed to subscribe:", err)
+		return
+	}
+
+	err = pubsub.SubscribeJSON(amqpConn, string(routing.ExchangePerilTopic), fmt.Sprintf("%s.%s", "army_moves", username),
+		"army_moves.*", pubsub.SimpleQueueType{Durable: false}, HandlerMove(gameState))
 	if err != nil {
 		fmt.Println("Failed to subscribe:", err)
 		return
@@ -69,6 +94,10 @@ func main() {
 			if err != nil {
 				fmt.Println("Failed to move:", err)
 				continue
+			}
+			err = pubsub.PublishJSON(channel, string(routing.ExchangePerilTopic), fmt.Sprintf("army_moves.%s", username), move)
+			if err != nil {
+				fmt.Println("Failed to publish:", err)
 			}
 			fmt.Println("Moved to:", move)
 		case "status":
