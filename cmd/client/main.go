@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/bootdotdev/learn-pub-sub-starter/internal/gamelogic"
@@ -11,31 +12,6 @@ import (
 )
 
 const RMQConnectionString = "amqp://guest:guest@localhost:5672/"
-
-func HandlerPause(gs *gamelogic.GameState) func(routing.PlayingState) pubsub.AckType {
-	return func(ps routing.PlayingState) pubsub.AckType {
-		defer fmt.Print("> ")
-		gs.HandlePause(ps)
-		return pubsub.Ack
-	}
-}
-
-func HandlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) pubsub.AckType {
-	return func(am gamelogic.ArmyMove) pubsub.AckType {
-		defer fmt.Print("> ")
-		outcome := gs.HandleMove(am)
-		switch outcome {
-		case gamelogic.MoveOutComeSafe:
-			return pubsub.Ack
-		case gamelogic.MoveOutcomeMakeWar:
-			return pubsub.Ack
-		case gamelogic.MoveOutcomeSamePlayer:
-			return pubsub.NackDiscard
-		default:
-			return pubsub.NackRequeue
-		}
-	}
-}
 
 func main() {
 	fmt.Println("Starting Peril client...")
@@ -72,10 +48,21 @@ func main() {
 	}
 
 	err = pubsub.SubscribeJSON(amqpConn, string(routing.ExchangePerilTopic), fmt.Sprintf("%s.%s", "army_moves", username),
-		"army_moves.*", pubsub.SimpleQueueType{Durable: false}, HandlerMove(gameState))
+		"army_moves.*", pubsub.SimpleQueueType{Durable: false}, HandlerMove(gameState, channel))
 	if err != nil {
 		fmt.Println("Failed to subscribe:", err)
 		return
+	}
+	err = pubsub.SubscribeJSON(
+		amqpConn,
+		routing.ExchangePerilTopic,
+		routing.WarRecognitionsPrefix,
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.SimpleQueueType{Durable: true},
+		handlerWar(gameState),
+	)
+	if err != nil {
+		log.Fatalf("could not subscribe to war declarations: %v", err)
 	}
 
 	for true {
