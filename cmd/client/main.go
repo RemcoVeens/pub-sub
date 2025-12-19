@@ -59,7 +59,7 @@ func main() {
 		routing.WarRecognitionsPrefix,
 		routing.WarRecognitionsPrefix+".*",
 		pubsub.SimpleQueueType{Durable: true},
-		handlerWar(gameState),
+		handlerWar(gameState, channel),
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to war declarations: %v", err)

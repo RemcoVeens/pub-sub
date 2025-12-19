@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"fmt"
 	"os"
 
@@ -26,17 +28,35 @@ func main() {
 		return
 	}
 
-	_, _, err = pubsub.DeclareAndBind(
+	// _, _, err = pubsub.DeclareAndBind(
+	// 	amqpConn,
+	// 	routing.ExchangePerilTopic,
+	// 	"game_logs",
+	// 	"game_logs.*",
+	// 	pubsub.SimpleQueueType{Durable: true},
+	// )
+	// if err != nil {
+	// 	fmt.Println("Failed to declare and bind:", err)
+	// 	return
+	// }
+	pubsub.SubscribeGOB(
 		amqpConn,
 		routing.ExchangePerilTopic,
 		"game_logs",
 		"game_logs.*",
 		pubsub.SimpleQueueType{Durable: true},
+		func(data []byte) (pubsub.AckType, error) {
+			var val routing.GameLog
+			dec := gob.NewDecoder(bytes.NewBuffer(data))
+			err := dec.Decode(&val)
+			if err != nil {
+				fmt.Println("Failed to unmarshal:", err)
+				return pubsub.NackDiscard, err
+			}
+			fmt.Println("Received game log:", val)
+			return pubsub.Ack, nil
+		},
 	)
-	if err != nil {
-		fmt.Println("Failed to declare and bind:", err)
-		return
-	}
 
 	for true {
 		words := gamelogic.GetInput()
