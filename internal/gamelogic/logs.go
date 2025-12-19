@@ -14,6 +14,7 @@ const logsFile = "game.log"
 const writeToDiskSleep = 1 * time.Second
 
 func WriteLog(gamelog routing.GameLog) error {
+	defer fmt.Print("> ")
 	log.Printf("received game log...")
 	time.Sleep(writeToDiskSleep)
 

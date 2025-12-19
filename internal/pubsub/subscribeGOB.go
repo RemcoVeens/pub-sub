@@ -11,30 +11,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// func encode(gl GameLog) ([]byte, error) {
-//     var buf bytes.Buffer
-//     enc := gob.NewEncoder(&buf)
-//     err := enc.Encode(gl)
-//     if err != nil {
-//         return nil, err
-//     }
-//     return buf.Bytes(), nil
-// }
-
-// func decode(data []byte) (GameLog, error) {
-// 	var log GameLog
-//     buf := bytes.NewBuffer(data)
-//     dec := gob.NewDecoder(buf)
-
-//     // Decode the data from the buffer into the log variable
-//     err := dec.Decode(&log)
-//     if err != nil {
-//         return GameLog{}, err
-//     }
-
-//	    return log, nil
-//	}
-
 func SubscribeGOB[T any](
 	conn *amqp.Connection,
 	exchange,
@@ -47,9 +23,9 @@ func SubscribeGOB[T any](
 	if err != nil {
 		return err
 	}
+	ch.Qos(10, 0, false)
 	delCH, err := ch.Consume(queueName, "", false, false, false, false, nil)
 	go func(delCH <-chan amqp.Delivery) {
-		defer fmt.Print("> ")
 		for mess := range delCH {
 			var val string
 			dec := gob.NewDecoder(bytes.NewBuffer(mess.Body))
